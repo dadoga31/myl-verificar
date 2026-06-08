@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verificación de Factura — Myl Express Logística</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f8fafc;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    color: #334155;
+  }
+
+  .card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.10);
+    padding: 40px 36px;
+    max-width: 480px;
+    width: 100%;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 28px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  .logo-text {
+    font-size: 20px;
+    font-weight: 900;
+    color: #7c3ae3;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-top: 1px;
+  }
+
+  .badge {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-radius: 12px;
+    margin-bottom: 28px;
+    font-weight: 700;
+    font-size: 15px;
+  }
+
+  .badge.ok {
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1.5px solid #bbf7d0;
+  }
+
+  .badge.error {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1.5px solid #fecaca;
+  }
+
+  .badge .icon {
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .fields {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .field {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 11px 0;
+    border-bottom: 1px solid #f1f5f9;
+    gap: 12px;
+  }
+
+  .field:last-child { border-bottom: none; }
+
+  .field-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    flex-shrink: 0;
+  }
+
+  .field-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+    text-align: right;
+  }
+
+  .field-value.mono {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    word-break: break-all;
+    color: #475569;
+    text-align: right;
+  }
+
+  .total-value {
+    font-size: 18px;
+    font-weight: 900;
+    color: #7c3ae3;
+  }
+
+  .footer {
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid #f1f5f9;
+    font-size: 11px;
+    color: #94a3b8;
+    line-height: 1.7;
+    text-align: center;
+  }
+
+  .footer strong {
+    color: #64748b;
+  }
+
+  .error-state {
+    text-align: center;
+    padding: 20px 0;
+  }
+
+  .error-state p {
+    font-size: 13px;
+    color: #64748b;
+    margin-top: 12px;
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<div class="card" id="card">
+  <div class="header">
+    <div>
+      <div class="logo-text">MYL</div>
+      <div class="logo-sub">Express Logística</div>
+    </div>
+    <div style="margin-left:auto; font-size:11px; color:#94a3b8; text-align:right; line-height:1.5;">
+      Portal de verificación<br>de facturas
+    </div>
+  </div>
+  <div id="content">Cargando...</div>
+</div>
+
+<script>
+function formatFecha(iso) {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  return `${parseInt(d)} de ${meses[parseInt(m)-1]} de ${y}`;
+}
+
+function formatTotal(t) {
+  const n = parseFloat(t);
+  if (isNaN(n)) return '—';
+  return n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+}
+
+function render() {
+  const hash = window.location.hash.slice(1); // quitar el #
+  const content = document.getElementById('content');
+
+  if (!hash) {
+    content.innerHTML = `
+      <div class="badge error"><span class="icon">⚠️</span> URL de verificación inválida</div>
+      <div class="error-state">
+        <p>Esta página solo puede accederse escaneando el código QR de una factura emitida por <strong>Myl Express Logística S.L.</strong></p>
+      </div>`;
+    return;
+  }
+
+  // Parsear params del hash: #n=INV-042&f=2026-06-08&t=548.13&h=a3f8c2d1...
+  const params = new URLSearchParams(hash);
+  const numero  = params.get('n') || '';
+  const fecha   = params.get('f') || '';
+  const total   = params.get('t') || '';
+  const sello   = params.get('h') || '';
+
+  if (!numero || !fecha || !total || !sello) {
+    content.innerHTML = `
+      <div class="badge error"><span class="icon">❌</span> Datos de factura incompletos</div>
+      <div class="error-state">
+        <p>El código QR escaneado no contiene todos los datos necesarios para la verificación.</p>
+      </div>`;
+    return;
+  }
+
+  const selloCorto = sello.length > 16
+    ? sello.slice(0,8).toUpperCase() + '...' + sello.slice(-8).toUpperCase()
+    : sello.toUpperCase();
+
+  content.innerHTML = `
+    <div class="badge ok">
+      <span class="icon">✅</span>
+      <span>Factura expedida por SIF verificable</span>
+    </div>
+
+    <div class="fields">
+      <div class="field">
+        <span class="field-label">Número</span>
+        <span class="field-value">${escHtml(numero)}</span>
+      </div>
+      <div class="field">
+        <span class="field-label">Fecha</span>
+        <span class="field-value">${formatFecha(fecha)}</span>
+      </div>
+      <div class="field">
+        <span class="field-label">Emisor</span>
+        <span class="field-value">Myl Express Logística S.L.<br><span style="font-size:11px;font-weight:500;color:#64748b;">CIF B26658302</span></span>
+      </div>
+      <div class="field">
+        <span class="field-label">Importe total</span>
+        <span class="field-value total-value">${formatTotal(total)}</span>
+      </div>
+      <div class="field">
+        <span class="field-label">Sello SHA-256</span>
+        <span class="field-value mono">${escHtml(selloCorto)}</span>
+      </div>
+    </div>
+
+    <div class="footer">
+      Sistema Informático de Facturación (<strong>SIF</strong>) conforme a<br>
+      <strong>Ley 11/2021</strong> y <strong>RD 1007/2023</strong> — Modalidad No Verifactu.<br>
+      El sello de integridad garantiza que esta factura no ha sido modificada.
+    </div>`;
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+render();
+</script>
+</body>
+</html>
